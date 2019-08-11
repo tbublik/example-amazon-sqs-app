@@ -1,0 +1,143 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A sample template
+
+Resources:
+  ### Amazon SQS
+  ImageQueue:
+    Type: AWS::SQS::Queue
+    Properties: 
+      QueueName: 'MyQueue'
+
+  QueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties: 
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Sid: "allow-ec2-receive"
+            Effect: "Allow"
+            Principal: "*"
+            Action: 
+              - "sqs:ReceiveMessage"
+            Resource: !GetAtt ImageQueue.Arn
+            Condition:
+             StringLike:
+               aws:SourceIp:
+                 - !GetAtt EC2JobInstance.PrivateIp 
+          - 
+            Sid: "allow-sns-messages"
+            Effect: "Allow"
+            Principal:
+              "AWS":
+                - "*"
+            Action: 
+              - "sqs:SendMessage"
+            Resource: !GetAtt ImageQueue.Arn
+            Condition:
+             ArnEquals:
+               aws:SourceArn:
+                 - !ImportValue ImageNotifierTopicArn
+      Queues: 
+        - !Ref ImageQueue
+
+  ### Extend existing SNS Topic with pushing messages to SQS
+  SnsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !GetAtt ImageQueue.Arn
+      Protocol: sqs
+      Region: !Ref "AWS::Region"
+      TopicArn: !ImportValue ImageNotifierTopicArn
+
+  ### Amazon Systems Manager Parameter for SQS Queue URL
+  SqsUrlParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: sqsUrl
+      Type: String
+      Value: !Ref ImageQueue
+  
+  ### Amazon EC2 Instance that performs the image analyze
+  EC2JobInstance:
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: "ami-0cc293023f983ed53" # This is an Amazon Linux AMI
+      InstanceType: t2.micro
+      IamInstanceProfile: !Ref EC2JobInstanceProfile
+      KeyName: online-course
+      SecurityGroupIds:
+        - !ImportValue WebSG
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          amazon-linux-extras install docker -y
+          service docker start
+          usermod -a -G docker ec2-user
+          chkconfig docker on
+          yum install -y git
+          curl -L https://github.com/docker/compose/releases/download/1.22.0/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+          chmod +x /usr/local/bin/docker-compose
+          git clone https://github.com/tbublik/example-amazon-sqs-app.git /home/ec2-user/source
+          cd /home/ec2-user/source
+          docker-compose up --build
+      Tags:
+        - Key: Name
+          Value: batch
+
+  EC2JobRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      RoleName: 'EC2BatchRole'   
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+
+  EC2JobInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: 'EC2BatchInstanceProfile'
+      Roles:
+        - !Ref EC2JobRole
+
+  ### DynamoDB Table to store calculated data
+  DynamoDB:
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions: 
+        - 
+          AttributeName: "checksum"
+          AttributeType: "S"
+      KeySchema: 
+        - 
+          AttributeName: "checksum"
+          KeyType: "HASH"
+      ProvisionedThroughput: 
+        ReadCapacityUnits: "5"
+        WriteCapacityUnits: "5"
+      TableName: "ImageAnalytics"
+
+  DynamoDBParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: imageAnalyticsTable
+      Type: String
+      Value: !Ref DynamoDB
+
+Outputs:
+  SqsArn:
+    Value: !GetAtt ImageQueue.Arn
+    Export:
+      Name: sqsArn
