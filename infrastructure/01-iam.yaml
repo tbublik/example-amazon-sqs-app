@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A sample template
+Resources:
+  ProgrammaticAccessUser:
+    Type: AWS::IAM::User
+    Properties: 
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      UserName: 'tbublik'
+
+  ProgrammaticAccessUserKeys:
+    Type: AWS::IAM::AccessKey
+    Properties: 
+      UserName: !Ref ProgrammaticAccessUser
+  
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      RoleName: 'EC2Role'   
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: 'EC2InstanceProfile'
+      Roles:
+        - !Ref EC2Role
+      
+Outputs:
+  SecretKey:
+    Description: My Amazon programmatic secret key
+    Value: !GetAtt ProgrammaticAccessUserKeys.SecretAccessKey
+    Export:
+      Name: secretKey
+
+  EC2InstanceProfile:
+    Description: EC2 Instance Profile Name
+    Value: !Ref EC2InstanceProfile
+    Export:
+      Name: ec2ProfileName

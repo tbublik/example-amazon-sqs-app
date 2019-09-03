@@ -1,0 +1,120 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A sample template
+Parameters: 
+  DBPassword: 
+    Type: String
+    Description: Secret password from RDS Database
+    NoEcho: 'true'
+  DBUser:
+    Type: String
+    Description: The RDS DB User 
+    NoEcho: 'true'
+  Environment:
+    Type: String
+Resources:
+  DBEndpointParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: DB_URL
+      Type: String
+      Value: !GetAtt MyDB.Endpoint.Address
+
+  DBPasswordParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: DB_PASS
+      Type: String
+      Value: !Ref DBPassword
+
+  DBUserParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: DB_USER
+      Type: String
+      Value: !Ref DBUser
+  
+  S3UploadBucketParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: S3_FILE_BUCKET
+      Type: String
+      Value: !Ref ImagesBucket
+
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: 'Security group to secure Flask Webapp'
+      GroupName: !Sub 'WebApp-${Environment}'
+
+  HTTPIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+        GroupName: !Ref WebSecurityGroup
+        IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+
+  SSHIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+        GroupName: !Ref WebSecurityGroup
+        IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+
+  MySQLIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+        GroupName: !Ref WebSecurityGroup
+        IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        SourceSecurityGroupId: !GetAtt WebSecurityGroup.GroupId
+
+  MyDB:
+    Type: "AWS::RDS::DBInstance"
+    Properties: 
+      AllocatedStorage: 20
+      DBInstanceClass: db.t2.micro
+      DBName: dev
+      Engine: MySQL
+      EngineVersion: "5.7.22"
+      MasterUserPassword: 
+        Ref: DBPassword
+      MasterUsername: 
+        Ref: DBUser
+      Tags: 
+        - 
+          Key: Name
+          Value: "My SQL Database"
+      VPCSecurityGroups:
+        - !GetAtt WebSecurityGroup.GroupId
+      PubliclyAccessible: False
+
+  ImagesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: 'flask-images-uploads-tbublik'
+      NotificationConfiguration:
+        LambdaConfigurations:
+        - Function: !ImportValue ResizerLambdaArn
+          Event: "s3:ObjectCreated:*"
+          Filter:
+            S3Key:
+              Rules:
+              - Name: suffix
+                Value: .jpg
+
+Outputs:
+  WebSecurityGroup:
+    Description: Security Group used by App and DB
+    Value: !GetAtt WebSecurityGroup.GroupId
+    Export:
+      Name: WebSG
+
+  ImagesBucket:
+    Value: !GetAtt ImagesBucket.Arn
+    Export:
+      Name: ImagesBucketArn

@@ -22,7 +22,7 @@ Resources:
               - "sqs:ReceiveMessage"
             Resource: !GetAtt ImageQueue.Arn
             Condition:
-             StringLike:
+             IpAddress:
                aws:SourceIp:
                  - !GetAtt EC2JobInstance.PrivateIp 
           - 
@@ -135,9 +135,3 @@ Resources:
       Name: imageAnalyticsTable
       Type: String
       Value: !Ref DynamoDB
-
-Outputs:
-  SqsArn:
-    Value: !GetAtt ImageQueue.Arn
-    Export:
-      Name: sqsArn

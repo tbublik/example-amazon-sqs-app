@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A sample template
+
+Resources:
+  MyEC2Instance: #An inline comment
+    Type: "AWS::EC2::Instance"
+    Properties: 
+      ImageId: "ami-0cc293023f983ed53" #Another comment -- This is a Linux AMI
+      InstanceType: t2.micro
+      IamInstanceProfile: !ImportValue ec2ProfileName
+      KeyName: online-course
+      SecurityGroupIds:
+        - !ImportValue WebSG
+      UserData:
+        Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            amazon-linux-extras install docker -y
+            service docker start
+            usermod -a -G docker ec2-user
+            chkconfig docker on
+            yum install -y git
+            curl -L https://github.com/docker/compose/releases/download/1.22.0/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+            chmod +x /usr/local/bin/docker-compose
+            git clone https://github.com/tbublik/example-web-app-for-amazon-ec2.git /home/ec2-user/source
+            cd /home/ec2-user/source
+            git checkout amazon-parameter-store
+            docker-compose up --build
+      Tags:
+        - Key: Name
+          Value: app

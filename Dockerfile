@@ -13,4 +13,4 @@ COPY . /app
 # Set region for all Amazon API commands running inside of container
 ENV AWS_DEFAULT_REGION eu-central-1
 
-CMD python3 app.py
+CMD python3 job.py

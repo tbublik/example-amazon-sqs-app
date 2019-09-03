@@ -34,10 +34,12 @@ class Analyzer:
 
         # Poll Amazon SQS messages
         queue = sqs.Queue(url=sqsUrl)
-        messages = queue.receive_messages(WaitTimeSeconds=20)
-
+        logger.info("Start long polling")
+        messages = queue.receive_messages(WaitTimeSeconds=20, MaxNumberOfMessages=10)
+        logger.info("Long polling finished")
+        
+        # Define color schema (OpenCV uses BGR)
         color_names = ['blue', 'green', 'red']
-        items = []
 
         for message in messages:
             logger.info(f"Message {message.message_id} recieved.")
@@ -47,26 +49,28 @@ class Analyzer:
             s3bucket = event["Records"][0]["s3"]["bucket"]["name"]
 
             # Get image from Amazon S3
-            response = s3.Object(
+            s3_response = s3.Object(
                 bucket_name=s3bucket,
                 key=s3key
             )
-            file_bytes = numpy.frombuffer(response.get()['Body'].read(), dtype=numpy.uint8)
-            img = cv2.imdecode(file_bytes, cv2.IMREAD_UNCHANGED) # OpenCV uses BGR color schema instead of RGB
+            file_bytes = numpy.frombuffer(s3_response.get()['Body'].read(), dtype=numpy.uint8) # Transform image body to array of bytes to feed to cv2.imdecode
+            img = cv2.imdecode(file_bytes, cv2.IMREAD_UNCHANGED)
 
-            # Calculate image hash and calculate amount of pixels per color
+            # Calculate image hash amount of pixels per color
             hash = hashlib.md5(img)
             avg_color_per_row = numpy.average(img, axis=0)
             avg_color = numpy.average(avg_color_per_row, axis=0)
 
             # Generate DynamoDB item
             item = {'checksum': hash.hexdigest()}
-            for i in range(len(avg_color)-1):
+            logger.info(f"Colors calculated (BGR): {avg_color}")
+            for i, v in enumerate(avg_color):
                 if avg_color[i] > 0:
-                    item[color_names[i]] = int(avg_color[i])
+                    item[color_names[i]] = int(v)
             items.append(item)
 
-            message.delete() # Remove message from the queue
+            # Remove message from the queue, so no other consumer could see and digest it
+            message.delete() 
             logger.info(f"Message {message.message_id} has been digested.")
         
         # Store in DynamoDB
@@ -78,12 +82,14 @@ class Analyzer:
                         Item = item
                     )
             logger.info(f"""Items saved in DynamoDB {imageAnalyticsTableName} table.""")
-    
-while 1:
-    try:
-        logger.info(f"""Job started [{strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime())}]""")
-        Analyzer().job()
-        logger.info(f"""Job finished [{strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime())}]""")
-        time.sleep(30)
-    except:
-        raise
+
+
+if __name__ == '__main__':
+    while 1:
+        try:
+            logger.info(f"""Job started [{strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime())}]""")
+            Analyzer().job()
+            logger.info(f"""Job finished [{strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime())}]""")
+            time.sleep(10)
+        except:
+            raise
