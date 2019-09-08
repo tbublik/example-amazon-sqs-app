@@ -40,6 +40,7 @@ class Analyzer:
         
         # Define color schema (OpenCV uses BGR)
         color_names = ['blue', 'green', 'red']
+        items = []
 
         for message in messages:
             logger.info(f"Message {message.message_id} recieved.")
