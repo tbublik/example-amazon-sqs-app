@@ -13,9 +13,10 @@ table = dynamodb.Table(imageAnalyticsTableName)
 color_names = ['blue', 'green', 'red']
 
 while 1:
-    # Generate fake pixel count
-    item = {}
     start = time.time()
+    item = {}
+
+    # Generate fake pixel count
     for i in range(len(color_names)):
         if sum(item.values()) < 255:
             if i == len(color_names)-1:
@@ -24,8 +25,10 @@ while 1:
                 item[color_names[i]] = random.randint(0,255-sum(item.values()))
         else:
             break
-    file_content = random.randint(0,99999) # Generate fake file content to hash it and put in DynamoDB
+            
+    # Generate fake file content to hash it and put in DynamoDB
+    file_content = random.randint(0,99999) 
     item['checksum'] = hashlib.md5(str(file_content).encode()).hexdigest()
-    response = table.put_item(Item=item, ReturnConsumedCapacity='TOTAL')
+    response = table.put_item(Item=item)
     end = time.time()
-    print(f"""[{strftime("%H:%M:%S", gmtime())}] Put item {item['checksum']} finished in {end - start} seconds. RetryAttempts {response['ResponseMetadata']['RetryAttempts']}""")
+    print(f"""[{strftime("%H:%M:%S", gmtime())}] Put item {item['checksum']} finished in {end - start} seconds. RetryAttempts {response['ResponseMetadata']['RetryAttempts']}.""")

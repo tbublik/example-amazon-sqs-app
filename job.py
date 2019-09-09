@@ -44,6 +44,7 @@ class Analyzer:
 
         for message in messages:
             logger.info(f"Message {message.message_id} recieved.")
+
             # Read Amazon SQS message
             event = ast.literal_eval(json.loads(message.body)["Message"])
             s3key = event["Records"][0]["s3"]["object"]["key"]
@@ -54,7 +55,8 @@ class Analyzer:
                 bucket_name=s3bucket,
                 key=s3key
             )
-            file_bytes = numpy.frombuffer(s3_response.get()['Body'].read(), dtype=numpy.uint8) # Transform image body to array of bytes to feed to cv2.imdecode
+            # Transform image body to array of bytes to feed to cv2.imdecode
+            file_bytes = numpy.frombuffer(s3_response.get()['Body'].read(), dtype=numpy.uint8)
             img = cv2.imdecode(file_bytes, cv2.IMREAD_UNCHANGED)
 
             # Calculate image hash amount of pixels per color
@@ -82,8 +84,7 @@ class Analyzer:
                     batch.put_item(
                         Item = item
                     )
-            logger.info(f"""Items saved in DynamoDB {imageAnalyticsTableName} table.""")
-
+                    logger.info(f"""{len(items)} items saved in DynamoDB {imageAnalyticsTableName} table.""")
 
 if __name__ == '__main__':
     while 1:
