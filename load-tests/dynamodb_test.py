@@ -25,10 +25,11 @@ while 1:
                 item[color_names[i]] = random.randint(0,255-sum(item.values()))
         else:
             break
-            
+
     # Generate fake file content to hash it and put in DynamoDB
     file_content = random.randint(0,99999) 
     item['checksum'] = hashlib.md5(str(file_content).encode()).hexdigest()
     response = table.put_item(Item=item)
     end = time.time()
-    print(f"""[{strftime("%H:%M:%S", gmtime())}] Put item {item['checksum']} finished in {end - start} seconds. RetryAttempts {response['ResponseMetadata']['RetryAttempts']}.""")
+    print(f"""[{strftime("%H:%M:%S", gmtime())}] Put item {item['checksum']} finished in {end - start} seconds.
+    RetryAttempts: {response['ResponseMetadata']['RetryAttempts']}.""")
