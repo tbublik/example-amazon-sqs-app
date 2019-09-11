@@ -40,7 +40,6 @@ class Analyzer:
         
         # Define color schema (OpenCV uses BGR)
         color_names = ['blue', 'green', 'red']
-        items = []
 
         for message in messages:
             logger.info(f"Message {message.message_id} recieved.")
@@ -70,21 +69,14 @@ class Analyzer:
             for i, v in enumerate(avg_color):
                 if avg_color[i] > 0:
                     item[color_names[i]] = int(v)
-            items.append(item)
 
             # Remove message from the queue, so no other consumer could see and digest it
             message.delete() 
-            logger.info(f"Message {message.message_id} has been digested.")
         
-        # Store in DynamoDB
-        if len(items) > 0:
+            # Store in DynamoDB
             table = dynamodb.Table(imageAnalyticsTableName)
-            with table.batch_writer() as batch:
-                for item in items:
-                    batch.put_item(
-                        Item = item
-                    )
-                    logger.info(f"""{len(items)} items saved in DynamoDB {imageAnalyticsTableName} table.""")
+            table.put_item(Item=item)
+            logger.info(f"""{item} has been saved in DynamoDB {imageAnalyticsTableName} table.""")
 
 if __name__ == '__main__':
     while 1:
